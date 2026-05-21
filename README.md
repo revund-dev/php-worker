@@ -57,12 +57,8 @@ The worker advertises one capability via the `Describe` RPC:
 
 The wire contract is defined in
 [`proto/worker.proto`](./proto/worker.proto), vendored inside the
-package. The canonical source lives at
-[`revund-dev/proto/worker/v1/worker.proto`](https://github.com/revund-dev/proto/blob/main/worker/v1/worker.proto)
-and is re-vendored on every release.
-
-Generated PHP stubs land under `proto/Revund/Worker/V1/` (built
-from the .proto via the `composer proto` script).
+package. Generated PHP stubs land under `proto/Revund/Worker/V1/`
+(built from the .proto via the `composer proto` script).
 
 ## License
 
