@@ -1,0 +1,34 @@
+#!/usr/bin/env php
+<?php
+// revund-php-worker — entrypoint installed by Composer.
+//
+// Reads PORT from REVUND_PHP_WORKER_PORT (default 50052).
+//
+// Prints "ready: 0.0.0.0:<port>" on stdout once the gRPC
+// server has bound — the Revund CLI greps for that line
+// to know when to start sending RPCs.
+
+declare(strict_types=1);
+
+// Composer-installed autoload discovery: walk up looking
+// for either a local vendor/autoload.php (dev checkout)
+// or a global Composer vendor (when installed via
+// `composer global require revund/php-worker`).
+$candidates = [
+    __DIR__ . '/../vendor/autoload.php',                 // dev checkout
+    __DIR__ . '/../../../autoload.php',                  // installed under vendor/revund/php-worker
+    getenv('COMPOSER_HOME') . '/vendor/autoload.php',    // global install
+];
+foreach ($candidates as $path) {
+    if ($path && is_file($path)) {
+        require $path;
+        break;
+    }
+}
+
+use Revund\PHPWorker\Server;
+
+$port = (int) (getenv('REVUND_PHP_WORKER_PORT') ?: '50052');
+
+$server = new Server($port);
+$server->run();

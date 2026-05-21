@@ -1,0 +1,4 @@
+vendor/
+composer.lock
+*.tgz
+.DS_Store
