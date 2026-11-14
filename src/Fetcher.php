@@ -174,6 +174,60 @@ final class Fetcher
         return $prefix . $u . ':' . $token . '@' . substr($cloneURL, strlen($prefix));
     }
 
+    private const GIT_CONFIG = [
+        'core.hooksPath=/dev/null',
+        'core.fsmonitor=false',
+        'core.untrackedCache=false',
+        'core.sshCommand=ssh',
+        'core.pager=cat',
+        'submodule.recurse=false',
+        'protocol.ext.allow=never',
+        'uploadpack.packObjectsHook=',
+        'credential.helper=',
+    ];
+
+    private const ENV_ALLOW = [
+        'PATH', 'HOME', 'USER', 'LOGNAME', 'TMPDIR', 'TMP', 'TEMP',
+        'LANG', 'LC_ALL', 'LC_CTYPE', 'LC_MESSAGES', 'TZ',
+        'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'no_proxy',
+        'SSL_CERT_FILE', 'SSL_CERT_DIR', 'SYSTEMROOT', 'COMSPEC', 'PATHEXT', 'WINDIR',
+    ];
+
+    /** @return array<int, string> */
+    public static function hardenedGitArgs(): array
+    {
+        $out = [];
+        foreach (self::GIT_CONFIG as $c) {
+            $out[] = '-c';
+            $out[] = $c;
+        }
+        return $out;
+    }
+
+    /**
+     * Allow-listed env plus no system/global git config. Never passes
+     * through REVUND_WORKER_SECRET or anything else the operator set.
+     *
+     * @return array<string, string>
+     */
+    public static function gitEnv(): array
+    {
+        $env = [];
+        foreach (self::ENV_ALLOW as $k) {
+            $v = getenv($k);
+            if ($v !== false) {
+                $env[$k] = $v;
+            }
+        }
+        return $env + [
+            'GIT_CONFIG_NOSYSTEM' => '1',
+            'GIT_CONFIG_GLOBAL' => '/dev/null',
+            'GIT_TERMINAL_PROMPT' => '0',
+            'GIT_PAGER' => 'cat',
+            'GIT_LFS_SKIP_SMUDGE' => '1',
+        ];
+    }
+
     /**
      * Run a command, capture stderr, throw a sanitized error on
      * non-zero exit. The thrown message NEVER contains an auth URL.
@@ -182,13 +236,16 @@ final class Fetcher
      */
     private static function run(string $bin, array $args): void
     {
-        $cmd = array_merge([$bin], $args);
+        // Hardened git (REV-17): the checkout is attacker-controlled, so
+        // hooks, fsmonitor and host config (filter/diff drivers) are off,
+        // and git gets an allow-listed env instead of ours.
+        $cmd = array_merge([$bin], self::hardenedGitArgs(), $args);
         $descriptors = [
             0 => ['pipe', 'r'],
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
         ];
-        $proc = proc_open($cmd, $descriptors, $pipes);
+        $proc = proc_open($cmd, $descriptors, $pipes, null, self::gitEnv());
         if (!is_resource($proc)) {
             throw new \RuntimeException("fetcher: {$bin} could not start");
         }
